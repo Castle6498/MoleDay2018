@@ -1,51 +1,70 @@
-/*----------------------------------------------------------------------------*/
-/* Copyright (c) 2017-2018 FIRST. All Rights Reserved.                        */
-/* Open Source Software - may be modified and shared by FRC teams. The code   */
-/* must be accompanied by the FIRST BSD license file in the root directory of */
-/* the project.                                                               */
-/*----------------------------------------------------------------------------*/
 
 package org.usfirst.frc.team6498.robot;
 
-import edu.wpi.first.networktables.NetworkTable;
-import edu.wpi.first.networktables.NetworkTableEntry;
-import edu.wpi.first.networktables.NetworkTableInstance;
+import org.opencv.core.Rect;
+import org.opencv.imgproc.Imgproc;
+
+import edu.wpi.cscore.UsbCamera;
 import edu.wpi.first.wpilibj.CameraServer;
 import edu.wpi.first.wpilibj.IterativeRobot;
+import edu.wpi.first.wpilibj.Spark;
+import edu.wpi.first.wpilibj.drive.DifferentialDrive;
+import edu.wpi.first.wpilibj.vision.VisionThread;
 
 
 public class Robot extends IterativeRobot {
-	public NetworkTableInstance table;
+	private static final int IMG_WIDTH = 320;
+	private static final int IMG_HEIGHT = 240;
 	
-	public NetworkTable nTable;
+	private VisionThread visionThread;
+	private double centerX = 0.0;
 	
-	public Robot() {
-		
-		nTable = NetworkTableInstance.getDefault().getTable("GRIP/myContoursReport/centerX");
-	}
+	private final Object imgLock = new Object();
+	
+	public DifferentialDrive base;
 	
 	@Override
 	public void robotInit() {
-		CameraServer.getInstance().startAutomaticCapture();
+		  UsbCamera camera = CameraServer.getInstance().startAutomaticCapture();
+		    camera.setResolution(IMG_WIDTH, IMG_HEIGHT);
+		    
+		    visionThread = new VisionThread(camera, new GripPipeline(), pipeline -> {
+		        if (!pipeline.filterContoursOutput().isEmpty()) {
+		            Rect r = Imgproc.boundingRect(pipeline.filterContoursOutput().get(0));
+		            synchronized (imgLock) {
+		                centerX = r.x + (r.width / 2);
+		                System.out.println(centerX);
+		            }
+		        }
+		    });
+		    visionThread.start();
 		
-		
+		    base= new DifferentialDrive(new Spark(0),new Spark(1));
 		
 	}
 
 	
 	@Override
 	public void autonomousInit() {
-		
+		System.out.println("initialized");
 	}
 	
-	NetworkTableEntry entry;
-	double[] number;
+	
 	
 	@Override
 	public void autonomousPeriodic() {
-		entry = nTable.getEntry("centerX");
-		entry.getDoubleArray(number);
-		System.out.println(entry.getNumberArray(Number[] {0,0}));
+		//System.out.println("running");
+		 double centerX;
+		    synchronized (imgLock) {
+		        centerX = this.centerX;
+		    }
+		    
+		    double turn = centerX - (IMG_WIDTH/2); /// 2);
+		    double output = turn*.008;
+		    System.out.println("output "+output);
+		    System.out.println("turn " +turn);
+		    base.arcadeDrive(0, output);
+		
 	}
 
 	
@@ -58,4 +77,9 @@ public class Robot extends IterativeRobot {
 	@Override
 	public void testPeriodic() {
 	}
+
+
+
+
 }
+
