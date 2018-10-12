@@ -3,10 +3,16 @@ package org.usfirst.frc.team6498.robot;
 
 import org.opencv.core.Rect;
 import org.opencv.imgproc.Imgproc;
+import org.usfirst.frc.team6498.control.PIDControlHelper;
+import org.usfirst.frc.team6498.control.PidGyroDisplacement;
+
+import com.kauailabs.navx.frc.AHRS;
 
 import edu.wpi.cscore.UsbCamera;
 import edu.wpi.first.wpilibj.CameraServer;
 import edu.wpi.first.wpilibj.IterativeRobot;
+import edu.wpi.first.wpilibj.Joystick;
+import edu.wpi.first.wpilibj.SPI;
 import edu.wpi.first.wpilibj.Spark;
 import edu.wpi.first.wpilibj.drive.DifferentialDrive;
 import edu.wpi.first.wpilibj.vision.VisionThread;
@@ -17,14 +23,50 @@ public class Robot extends IterativeRobot {
 	private static final int IMG_HEIGHT = 240;
 	
 	private VisionThread visionThread;
-	private double centerX = 0.0;
+	
+	private class VisionOutput{
+		double centerX=0.0;
+		boolean targetLocated=false;
+	}
+	//private double centerX = 0.0;
+	private VisionOutput v;
+	
 	
 	private final Object imgLock = new Object();
 	
 	public DifferentialDrive base;
 	
+	
+	Joystick j;
+     
+     
+     
+     public PIDControlHelper turnController;            
+     static double kPturnAngle = 0.02;
+     static double kIturnAngle = 0.00002;//0.00014;//26;1
+     static double kDturnAngle = 0;//0.003;//5;
+     static double kFturnAngle = 0.00;
+     static double kToleranceDegreesturnAngle = 0;//0.5f;
+	
+	
+	
+    public AHRS nav;
+	
 	@Override
 	public void robotInit() {
+		v=new VisionOutput();
+		j=new Joystick(0);
+		
+		base= new DifferentialDrive(new Spark(0),new Spark(1));
+		
+		nav = new AHRS(SPI.Port.kMXP);
+		
+		
+      	
+      	turnController = new PIDControlHelper(kPturnAngle, kIturnAngle, kDturnAngle, kFturnAngle, kToleranceDegreesturnAngle, 0, nav, -180,180);
+  		
+		
+		
 		  UsbCamera camera = CameraServer.getInstance().startAutomaticCapture();
 		    camera.setResolution(IMG_WIDTH, IMG_HEIGHT);
 		    
@@ -32,14 +74,21 @@ public class Robot extends IterativeRobot {
 		        if (!pipeline.filterContoursOutput().isEmpty()) {
 		            Rect r = Imgproc.boundingRect(pipeline.filterContoursOutput().get(0));
 		            synchronized (imgLock) {
-		                centerX = r.x + (r.width / 2);
-		                System.out.println(centerX);
+		                v.centerX = r.x + (r.width / 2);
+		                v.targetLocated=true;
+		               // System.out.println(centerX);
 		            }
+		        }else {
+		        	 synchronized (imgLock) {
+		        		 v.centerX = 0;
+			                v.targetLocated=false;
+			            }
+		        	  
 		        }
 		    });
 		    visionThread.start();
 		
-		    base= new DifferentialDrive(new Spark(0),new Spark(1));
+		    
 		
 	}
 
@@ -47,6 +96,7 @@ public class Robot extends IterativeRobot {
 	@Override
 	public void autonomousInit() {
 		System.out.println("initialized");
+		turnController.enable();
 	}
 	
 	
@@ -55,22 +105,42 @@ public class Robot extends IterativeRobot {
 	public void autonomousPeriodic() {
 		//System.out.println("running");
 		 double centerX;
+		 boolean located;
 		    synchronized (imgLock) {
-		        centerX = this.centerX;
+		        centerX = this.v.centerX;
+		        located=this.v.targetLocated;
 		    }
 		    
-		    double turn = centerX - (IMG_WIDTH/2); /// 2);
-		    double output = turn*.008;
-		    System.out.println("output "+output);
-		    System.out.println("turn " +turn);
-		    base.arcadeDrive(0, output);
+		   double turn = centerX - (IMG_WIDTH/2); /// 2);
+		    
+		   //System.out.println("centerX "+turn);
+		   double result;
+		   
+		    double setPoint = (60*turn)/160;
+		    if(located) {
+		    turnController.set(setPoint);
+		     result = turnController.result;
+		    }else {
+		     result=0;
+		    }
+		    //System.out.println("SetPoint "+setPoint);
+		   
+		    System.out.println("result "+result+" angle "+setPoint + " coordinate "+turn);
+		   
+		    
+		    base.arcadeDrive(0, result);
 		
+		    
+		    
 	}
 
+	public void autonomousDisable() {
+		turnController.disable();
+	}
 	
 	@Override
 	public void teleopPeriodic() {
-		
+		base.arcadeDrive(j.getY(), -j.getX());
 	}
 
 	
