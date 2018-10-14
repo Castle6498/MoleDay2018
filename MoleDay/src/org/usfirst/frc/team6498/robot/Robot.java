@@ -135,12 +135,35 @@ public class Robot extends IterativeRobot {
 		   
 		   
 		    
-		    base.tankDrive(result, -result);
+		    base.tankDrive(valueToSpark(result),valueToSpark(-result));
 		
 		    
 		    
 	}
 
+	
+	public double valueToSpark(double value) {
+		double sparkValue;
+		if(value>=0) {
+		if(value<.001) {
+			sparkValue=0;
+		}else {
+			sparkValue=0.7*value+0.3;
+		}
+		}else {
+			if(value>-.001) {
+				sparkValue=0;
+			}else {
+				sparkValue=0.7*value-0.3;
+			}
+		}
+		
+		return sparkValue;
+		
+	}
+	
+	
+	
 	public void autonomousDisable() {
 		turnController.disable();
 	}
