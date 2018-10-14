@@ -4,12 +4,14 @@ package org.usfirst.frc.team6498.robot;
 import org.opencv.core.Rect;
 import org.opencv.imgproc.Imgproc;
 import org.usfirst.frc.team6498.control.PIDControlHelper;
+import org.usfirst.frc.team6498.control.PidGyroAngle;
 import org.usfirst.frc.team6498.control.PidGyroDisplacement;
 
 import com.kauailabs.navx.frc.AHRS;
 
 import edu.wpi.cscore.UsbCamera;
 import edu.wpi.first.wpilibj.CameraServer;
+import edu.wpi.first.wpilibj.Compressor;
 import edu.wpi.first.wpilibj.IterativeRobot;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.SPI;
@@ -23,6 +25,8 @@ public class Robot extends IterativeRobot {
 	private static final int IMG_HEIGHT = 240;
 	
 	private VisionThread visionThread;
+	
+	public Compressor compressor;
 	
 	private class VisionOutput{
 		double centerX=0.0;
@@ -42,8 +46,8 @@ public class Robot extends IterativeRobot {
      
      
      public PIDControlHelper turnController;            
-     static double kPturnAngle = 0.02;
-     static double kIturnAngle = 0.00002;//0.00014;//26;1
+     static double kPturnAngle = 0.04;
+     static double kIturnAngle = 0.0;//0.00002;//0.00014;//26;1
      static double kDturnAngle = 0;//0.003;//5;
      static double kFturnAngle = 0.00;
      static double kToleranceDegreesturnAngle = 0;//0.5f;
@@ -61,9 +65,9 @@ public class Robot extends IterativeRobot {
 		
 		nav = new AHRS(SPI.Port.kMXP);
 		
-		
+		compressor=new Compressor();
       	
-      	turnController = new PIDControlHelper(kPturnAngle, kIturnAngle, kDturnAngle, kFturnAngle, kToleranceDegreesturnAngle, 0, nav, -180,180);
+      	turnController = new PIDControlHelper(kPturnAngle, kIturnAngle, kDturnAngle, kFturnAngle, kToleranceDegreesturnAngle, 0, new PidGyroAngle(nav), -720,720);
   		
 		
 		
@@ -95,6 +99,7 @@ public class Robot extends IterativeRobot {
 	
 	@Override
 	public void autonomousInit() {
+		compressor.start();
 		System.out.println("initialized");
 		turnController.enable();
 	}
@@ -116,19 +121,21 @@ public class Robot extends IterativeRobot {
 		   //System.out.println("centerX "+turn);
 		   double result;
 		   
-		    double setPoint = (60*turn)/160;
+		    double setPoint = nav.getAngle()+(30*turn)/160;
 		    if(located) {
 		    turnController.set(setPoint);
+		   
 		     result = turnController.result;
+		     System.out.println("result "+result+" angle "+setPoint + " coordinate "+turn+" error: "+turnController.turnController.getError());
 		    }else {
 		     result=0;
 		    }
 		    //System.out.println("SetPoint "+setPoint);
 		   
-		    System.out.println("result "+result+" angle "+setPoint + " coordinate "+turn);
+		   
 		   
 		    
-		    base.arcadeDrive(0, result);
+		    base.tankDrive(result, -result);
 		
 		    
 		    
@@ -136,6 +143,11 @@ public class Robot extends IterativeRobot {
 
 	public void autonomousDisable() {
 		turnController.disable();
+	}
+	
+	
+	public void teleopInit() {
+		compressor.start();
 	}
 	
 	@Override
@@ -146,6 +158,8 @@ public class Robot extends IterativeRobot {
 	
 	@Override
 	public void testPeriodic() {
+		base.tankDrive(j.getY(), j.getY());
+		System.out.println(j.getY());
 	}
 
 
